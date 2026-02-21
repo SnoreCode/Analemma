@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>3D 天球日行跡模擬器</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: #eee; font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; }
+        
+        /* 頂部資訊列 */
+        #top-bar { position: absolute; top: 0; left: 0; right: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); padding: 15px; text-align: center; z-index: 10; pointer-events: none; }
+        #date-text { font-size: 1.8em; font-weight: bold; color: #ffcc00; margin: 0; }
+
+        /* 左側控制面板 */
+        #ui-panel { position: absolute; top: 80px; left: 10px; background: rgba(10, 10, 20, 0.9); padding: 15px; border-radius: 8px; width: 220px; border: 1px solid #3366ff; backdrop-filter: blur(10px); z-index: 20; }
+        .slider-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.85em; color: #3366ff; margin-bottom: 5px; font-weight: bold; }
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #3366ff; }
+        .val { float: right; color: white; font-family: monospace; }
+        
+        /* 圖例說明 */
+        #legend { font-size: 0.75em; color: #aaa; margin-top: 10px; border-top: 1px solid #333; padding-top: 8px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div id="top-bar">
+    <div id="date-text">1月 1日</div>
+    <div id="day-count">正午 12:00 太陽位置模擬</div>
+</div>
+
+<div id="ui-panel">
+    <div class="slider-group">
+        <label>觀測者緯度 <span class="val" id="緯度顯示">23.5°</span></label>
+        <input type="range" id="緯度" min="-90" max="90" step="1" value="23.5">
+    </div>
+    <div class="slider-group">
+        <label>軌道離心率 <span class="val" id="離心率顯示">0.016</span></label>
+        <input type="range" id="離心率" min="0" max="0.5" step="0.001" value="0.016">
+    </div>
+    <div class="slider-group">
+        <label>地軸傾斜度 <span class="val" id="傾斜度顯示">23.5°</span></label>
+        <input type="range" id="傾斜度" min="0" max="45" step="0.1" value="23.5">
+    </div>
+    <div class="slider-group">
+        <label>模擬流逝速度 <span class="val" id="速度顯示">1.0</span></label>
+        <input type="range" id="速度" min="0" max="10" step="0.2" value="1.0">
+    </div>
+    <div id="legend">
+        <span style="color:#3366ff">─</span> <b>天赤道</b> (地球赤道投影)<br>
+        <span style="color:#ffffff">─</span> <b>子午線</b> (正午標準線)<br>
+        <span style="color:#ffcc00">●</span> <b>日行跡</b> (一年位置連線)
+    </div>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- 1. 初始化場景 ---
+    const 場景 = new THREE.Scene();
+    const 相機 = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 2000);
+    const 渲染器 = new THREE.WebGLRenderer({ antialias: true });
+    渲染器.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(渲染器.domElement);
+
+    const 控制器 = new OrbitControls(相機, 渲染器.domElement);
+    相機.position.set(25, 20, 35);
+    控制器.enableDamping = true;
+
+    // --- 2. 建立地平面與參考網格 ---
+    const 地平線 = new THREE.Mesh(
+        new THREE.CircleGeometry(20, 64),
+        new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+    );
+    地平線.rotation.x = Math.PI / 2;
+    場景.add(地平線);
+    場景.add(new THREE.GridHelper(40, 20, 0x222222, 0x222222));
+
+    // --- 3. 建立天球系統 ---
+    const 天球群組 = new THREE.Group(); // 用於隨緯度旋轉
+    場景.add(天球群組);
+
+    // 天球網格
+    const 天球體 = new THREE.Mesh(
+        new THREE.SphereGeometry(25, 48, 24),
+        new THREE.MeshBasicMaterial({ color: 0x3366ff, wireframe: true, transparent: true, opacity: 0.1 })
+    );
+    天球群組.add(天球體);
+
+    // 天赤道 (藍色圈)
+    const 天赤道幾何 = new THREE.TorusGeometry(25, 0.05, 16, 100);
+    const 天赤道 = new THREE.Mesh(天赤道幾何, new THREE.MeshBasicMaterial({ color: 0x3366ff }));
+    天赤道.rotation.x = Math.PI / 2;
+    天球群組.add(天赤道);
+
+    // 子午線 (白色半圓)
+    const 子午線幾何 = new THREE.TorusGeometry(25, 0.05, 16, 100);
+    const 子午線 = new THREE.Mesh(子午線幾何, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
+    子午線.rotation.y = Math.PI / 2;
+    天球群組.add(子午線);
+
+    // --- 4. 太陽與光影 ---
+    const 太陽球 = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd00 }));
+    場景.add(太陽球);
+    const 太陽光 = new THREE.PointLight(0xffffff, 1500);
+    場景.add(太陽光);
+    場景.add(new THREE.AmbientLight(0x404040));
+
+    let 日行跡曲線;
+
+    // --- 5. 核心天文算法 ---
+    /**
+     * 計算太陽在給定日期與地理參數下的地平坐標
+     * @param {number} 天數 - 從冬至起算的日期
+     * @param {number} 緯度 - 觀測者緯度
+     * @param {number} 傾斜 - 地軸傾斜度
+     * @param {number} 離心 - 軌道離心率
+     */
+    function 計算太陽位置(天數, 緯度, 傾斜, 離心) {
+        const M = (2 * Math.PI * 天數) / 365.25; // 平均近點角
+        const 傾斜弧度 = THREE.MathUtils.degToRad(傾斜);
+        const 緯度弧度 = THREE.MathUtils.degToRad(緯度);
+        
+        // 中心差修正 (Equation of Center)：由軌道離心率引起的速度變化
+        const 中心差 = (2 * 離心) * Math.sin(M) + (1.25 * 離心 * 離心) * Math.sin(2 * M);
+        const 真近點角 = M + 中心差;
+        
+        // 赤緯 (Declination)：太陽相對於赤道的仰角，由地軸傾斜引起
+        const 赤緯 = Math.asin(Math.sin(傾斜弧度) * Math.sin(真近點角));
+        
+        // 均時差修正：決定 8 字形的寬度與對稱性
+        const tanTilt = Math.tan(傾斜弧度 / 2) ** 2;
+        const 時差弧度 = tanTilt * Math.sin(2 * 真近點角) - 2 * 離心 * Math.sin(M) + 4 * 離心 * tanTilt * Math.sin(M) * Math.cos(2 * 真近點角);
+        
+        // 坐標轉換：赤道坐標 -> 地平坐標 (仰角與方位角)
+        const sin仰角 = Math.sin(緯度弧度) * Math.sin(赤緯) + Math.cos(緯度弧度) * Math.cos(赤緯) * Math.cos(時差弧度);
+        const 仰角 = Math.asin(Math.max(-1, Math.min(1, sin仰角)));
+        const cos方位角 = (Math.sin(赤緯) - Math.sin(仰角) * Math.sin(緯度弧度)) / (Math.cos(仰角) * Math.cos(緯度弧度));
+        const 方位角 = Math.acos(Math.max(-1, Math.min(1, cos方位角))) * (時差弧度 > 0 ? 1 : -1);
+
+        const 半徑 = 25; // 投影到天球半徑
+        return new THREE.Vector3(
+            半徑 * Math.cos(仰角) * Math.sin(方位角),
+            半徑 * Math.sin(仰角),
+            半徑 * Math.cos(仰角) * Math.cos(方位角)
+        );
+    }
+
+    // 更新日行跡軌跡線
+    const 更新日行跡 = () => {
+        if (日行跡曲線) 場景.remove(日行跡曲線);
+        const 點集 = [];
+        const 當前緯度 = parseFloat(document.getElementById('緯度').value);
+        const 當前傾斜 = parseFloat(document.getElementById('傾斜度').value);
+        const 當前離心 = parseFloat(document.getElementById('離心率').value);
+        
+        // 天球群組旋轉：模擬不同緯度的天球仰角 (90-緯度)
+        天球群組.rotation.x = THREE.MathUtils.degToRad(90 - 當前緯度);
+
+        for (let d = 0; d <= 365; d++) {
+            點集.push(計算太陽位置(d, 當前緯度, 當前傾斜, 當前離心));
+        }
+        
+        日行跡曲線 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(點集),
+            new THREE.LineBasicMaterial({ color: 0xffcc00, linewidth: 2 })
+        );
+        場景.add(日行跡曲線);
+    };
+
+    // --- 6. 動畫渲染迴圈 ---
+    let 累計天數 = 0;
+    function 渲染動畫() {
+        requestAnimationFrame(渲染動畫);
+        
+        const 速度 = parseFloat(document.getElementById('速度').value);
+        累計天數 = (累計天數 + 速度 * 0.5) % 365;
+        
+        const 緯度值 = parseFloat(document.getElementById('緯度').value);
+        const 傾斜值 = parseFloat(document.getElementById('傾斜度').value);
+        const 離心值 = parseFloat(document.getElementById('離心率').value);
+
+        const 位置 = 計算太陽位置(累計天數, 緯度值, 傾斜值, 離心值);
+        太陽球.position.copy(位置);
+        太陽光.position.copy(位置);
+        
+        document.getElementById('date-text').innerText = `第 ${Math.floor(累計天數)} 天`;
+        
+        控制器.update();
+        渲染器.render(場景, 相機);
+    }
+
+    // --- 7. 事件處理 ---
+    const 介面控制項 = ['緯度', '傾斜度', '離心率', '速度'];
+    介面控制項.forEach(標籤 => {
+        document.getElementById(標籤).oninput = (事件) => {
+            const 顯示尾綴 = (標籤==='離心率'||標籤==='速度' ? '' : '°');
+            document.getElementById(標籤+'顯示').innerText = 事件.target.value + 顯示尾綴;
+            更新日行跡();
+        };
+    });
+
+    window.onresize = () => {
+        相機.aspect = window.innerWidth / window.innerHeight;
+        相機.updateProjectionMatrix();
+        渲染器.setSize(window.innerWidth, window.innerHeight);
+    };
+
+    // 啟動程序
+    更新日行跡();
+    渲染動畫();
+</script>
+</body>
+</html>
