@@ -1,5 +1,3 @@
----
-
 # ⚖️ 免責聲明與 AI 輔助說明 | Disclaimer & AI-Assisted Development Disclosure
 
 ### 中文版
@@ -20,6 +18,6 @@ This project is a result of personal learning and technical exploration. **Gener
 
 ---
 
-### Note: This logic was refined with the assistance of Generative AI tools.
-### Purpose: Learning and academic exploration.
-### License: MIT License (See LICENSE file for details)
+###### Note: This logic was refined with the assistance of Generative AI tools.
+###### Purpose: Learning and academic exploration.
+###### License: MIT License (See LICENSE file for details)
